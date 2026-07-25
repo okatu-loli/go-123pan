@@ -16,14 +16,26 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strconv"
 	"time"
 
 	pan123 "github.com/okatu-loli/go-123pan"
 )
 
-// version 由 -ldflags "-X main.version=..." 注入。
+// version 由 -ldflags "-X main.version=..." 注入；
+// 未注入时回退到 go install 记录的模块版本。
 var version = "dev"
+
+func versionString() string {
+	if version != "dev" {
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		return bi.Main.Version
+	}
+	return version
+}
 
 const usageText = `pan123 - 123 云盘命令行工具
 
@@ -93,7 +105,7 @@ func main() {
 	case "link":
 		err = cmdLink(ctx, args)
 	case "version", "-v", "--version":
-		fmt.Println("pan123", version)
+		fmt.Println("pan123", versionString())
 	case "help", "-h", "--help":
 		fmt.Println(usageText)
 	default:
