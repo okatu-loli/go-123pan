@@ -5,7 +5,6 @@
 **Unofficial Go SDK for the 123Pan (123 Cloud Disk) Open Platform**
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/okatu-loli/go-123pan.svg)](https://pkg.go.dev/github.com/okatu-loli/go-123pan)
-[![Go Report Card](https://goreportcard.com/badge/github.com/okatu-loli/go-123pan)](https://goreportcard.com/report/github.com/okatu-loli/go-123pan)
 [![CI](https://github.com/okatu-loli/go-123pan/actions/workflows/ci.yml/badge.svg)](https://github.com/okatu-loli/go-123pan/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/okatu-loli/go-123pan)](https://github.com/okatu-loli/go-123pan/releases)
 [![License](https://img.shields.io/github/license/okatu-loli/go-123pan)](LICENSE)
