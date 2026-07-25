@@ -1,0 +1,27 @@
+name: Release
+
+# 每次推送到 main 后，按 Conventional Commits 自动计算语义化版本，
+# 打 tag 并发布 GitHub Release（含自动生成的 changelog）。
+# fix: -> patch, feat: -> minor, BREAKING CHANGE -> major；
+# docs/chore 等提交不会触发新版本。
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Semantic Release
+        uses: go-semantic-release/action@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          allow-initial-development-versions: false
+          changelog-file: CHANGELOG.md
+          update-file: "false"

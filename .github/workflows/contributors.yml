@@ -1,0 +1,30 @@
+name: Contributors
+
+# 每次合并进 main 后自动更新 README 的贡献者区块。
+# 使用 GITHUB_TOKEN 提交，GitHub 不会因此递归触发其他 workflow。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  contributors:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update contributors in README.md
+        uses: akhilmhdh/contributors-readme-action@v2.3.10
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          readme_path: README.md
+          commit_message: "docs: update contributors [skip ci]"
+      - name: Update contributors in README_EN.md
+        uses: akhilmhdh/contributors-readme-action@v2.3.10
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          readme_path: README_EN.md
+          commit_message: "docs: update contributors (en) [skip ci]"
