@@ -14,7 +14,12 @@ type TranscodeService struct {
 	client *Client
 }
 
-// FolderInfo 获取转码空间文件夹 ID（本地上传视频时作为 parentFileID 使用）。
+// FolderInfo 获取转码空间文件夹 ID。
+//
+// 接口: POST /api/v1/transcode/folder/info (QPS 20)
+//
+// 注意: 本地上传视频到转码空间时，将返回的文件夹 ID 作为 Upload.UploadFile
+// 的 parentFileID 使用。
 func (s *TranscodeService) FolderInfo(ctx context.Context) (int64, error) {
 	var out struct {
 		FileID int64 `json:"fileID"`
@@ -25,7 +30,14 @@ func (s *TranscodeService) FolderInfo(ctx context.Context) (int64, error) {
 	return out.FileID, nil
 }
 
-// CloudVideoFiles 获取云盘空间中的视频文件（category=2），用于后续 UploadFromCloudDisk。
+// CloudVideoFiles 获取云盘空间中的视频文件列表。
+//
+// 接口: GET /api/v2/file/list（固定 category=2，仅返回视频）
+//
+// 参数:
+//   - req: 文件列表查询参数，见 FileListRequest（分页、目录、搜索等）。
+//
+// 注意: 查询结果中的文件 ID 可用于 UploadFromCloudDisk 将视频转入转码空间。
 func (s *TranscodeService) CloudVideoFiles(ctx context.Context, req *FileListRequest) (*FileListResult, error) {
 	q := req.values()
 	q.Set("category", "2")
@@ -36,7 +48,12 @@ func (s *TranscodeService) CloudVideoFiles(ctx context.Context, req *FileListReq
 	return &out, nil
 }
 
-// SpaceFiles 获取转码空间的文件列表（businessType=2）。
+// SpaceFiles 获取转码空间的文件列表。
+//
+// 接口: GET /api/v2/file/list（固定 businessType=2，即转码空间）
+//
+// 参数:
+//   - req: 文件列表查询参数，见 FileListRequest（分页、目录、搜索等）。
 func (s *TranscodeService) SpaceFiles(ctx context.Context, req *FileListRequest) (*FileListResult, error) {
 	q := req.values()
 	q.Set("businessType", "2")
@@ -47,8 +64,14 @@ func (s *TranscodeService) SpaceFiles(ctx context.Context, req *FileListRequest)
 	return &out, nil
 }
 
-// UploadFromCloudDisk 将云盘空间的视频文件上传到转码空间，一次最多 100 个文件。
-// 注意：官方 QPS 限制为 1。
+// UploadFromCloudDisk 将云盘空间的视频文件上传（转存）到转码空间。
+//
+// 接口: POST /api/v1/transcode/upload/from_cloud_disk (QPS 1)
+//
+// 参数:
+//   - fileIDs: 云盘视频文件 ID 列表，一次最多 100 个。
+//
+// 注意: 官方 QPS 限制为 1，频繁调用时需自行限流。
 func (s *TranscodeService) UploadFromCloudDisk(ctx context.Context, fileIDs []int64) error {
 	body := make([]map[string]int64, 0, len(fileIDs))
 	for _, id := range fileIDs {
@@ -72,7 +95,16 @@ type ResolutionsResult struct {
 }
 
 // Resolutions 获取视频文件可转码的分辨率。
-// IsGetResolution 为 true 时结果尚未就绪，需轮询（建议 10s 间隔）。
+//
+// 接口: POST /api/v1/transcode/video/resolutions (QPS 1)
+//
+// 参数:
+//   - fileID: 转码空间中的视频文件 ID。
+//
+// 注意: 返回 IsGetResolution 为 true 表示服务端仍在解析，结果尚未就绪，
+// 需轮询，官方建议间隔 10 秒。返回的 Resolutions 为小写（如 "1080p"），
+// 发起转码时 P 必须转为大写（如 "1080P"）；NowOrFinishedResolutions 中的
+// 分辨率正在转码或已完成，无需重复提交。
 func (s *TranscodeService) Resolutions(ctx context.Context, fileID int64) (*ResolutionsResult, error) {
 	var out ResolutionsResult
 	err := s.client.post(ctx, "/api/v1/transcode/video/resolutions", map[string]int64{"fileId": fileID}, &out)
@@ -95,6 +127,16 @@ type TranscodeRequest struct {
 }
 
 // Transcode 发起视频转码操作。
+//
+// 接口: POST /api/v1/transcode/video (QPS 3)
+//
+// 参数:
+//   - req: 转码参数。FileID 为转码空间中的视频文件 ID；CodecName、VideoTime
+//     取自 Resolutions 的返回；Resolutions 为要转码的分辨率，逗号分隔且
+//     P 必须大写（如 "2160P,1080P,720P"）。
+//
+// 注意: 已转码或转码中的分辨率（见 NowOrFinishedResolutions）无需重复提交；
+// 转码进度可通过 Records 或 Results 查询。
 func (s *TranscodeService) Transcode(ctx context.Context, req *TranscodeRequest) error {
 	return s.client.post(ctx, "/api/v1/transcode/video", req, nil)
 }
@@ -109,7 +151,15 @@ type TranscodeRecord struct {
 	Link string `json:"link"`
 }
 
-// Records 查询某个视频的转码记录。
+// Records 查询某个视频各分辨率的转码记录。
+//
+// 接口: POST /api/v1/transcode/video/record (QPS 20)
+//
+// 参数:
+//   - fileID: 转码空间中的视频文件 ID。
+//
+// 注意: 记录状态 Status：1 准备转码、2 正在转码中、3-254 转码失败、255 转码成功；
+// 仅 Status=255 时 Link 返回 m3u8 播放链接。
 func (s *TranscodeService) Records(ctx context.Context, fileID int64) ([]TranscodeRecord, error) {
 	var out struct {
 		List []TranscodeRecord `json:"UserTranscodeVideoRecordList"`
@@ -141,7 +191,16 @@ type TranscodeResult struct {
 	Files  []TranscodeFile `json:"Files"`
 }
 
-// Results 查询某个视频的转码结果（含产物文件列表）。
+// Results 查询某个视频的转码结果，含各分辨率的产物文件列表。
+//
+// 接口: POST /api/v1/transcode/video/result (QPS 20)
+//
+// 参数:
+//   - fileID: 转码空间中的视频文件 ID。
+//
+// 注意: Status 含义同 Records：1 准备转码、2 正在转码中、3-254 转码失败、
+// 255 转码成功。产物中仅 m3u8 文件带播放 URL，ts 分片需用 DownloadTS
+// 获取下载地址。
 func (s *TranscodeService) Results(ctx context.Context, fileID int64) ([]TranscodeResult, error) {
 	var out struct {
 		List []TranscodeResult `json:"UserTranscodeVideoList"`
@@ -173,7 +232,15 @@ type VideoTranscodeList struct {
 	List   []VideoTranscodeItem `json:"list"`
 }
 
-// List 视频转码列表（仅限三方挂载应用授权 access_token 调用）。
+// List 获取视频转码列表。
+//
+// 接口: GET /api/v1/video/transcode/list
+//
+// 参数:
+//   - fileID: 视频文件 ID。
+//
+// 注意: 仅限三方挂载应用授权（OAuth）获取的 access_token 调用；
+// 返回 Status：1 待转码、3 转码失败、254 部分成功、255 全部成功。
 func (s *TranscodeService) List(ctx context.Context, fileID int64) (*VideoTranscodeList, error) {
 	q := url.Values{}
 	q.Set("fileId", strconv.FormatInt(fileID, 10))
@@ -194,7 +261,16 @@ const (
 	DeleteOriginalAndTranscoded DeleteMode = 2
 )
 
-// Delete 删除转码视频。
+// Delete 删除转码空间中的视频。
+//
+// 接口: POST /api/v1/transcode/delete (QPS 10)
+//
+// 参数:
+//   - fileID: 转码空间中的视频文件 ID。
+//   - mode: 删除范围。DeleteOriginal(1) 仅删除原文件；
+//     DeleteOriginalAndTranscoded(2) 删除原文件及转码后的文件。
+//
+// 注意: 删除转码后文件的操作不可逆，请谨慎使用 DeleteOriginalAndTranscoded。
 func (s *TranscodeService) Delete(ctx context.Context, fileID int64, mode DeleteMode) error {
 	return s.client.post(ctx, "/api/v1/transcode/delete", map[string]any{
 		"fileId":       fileID,
@@ -212,6 +288,13 @@ type TranscodeDownloadResult struct {
 }
 
 // DownloadOriginal 获取转码空间原文件的下载地址。
+//
+// 接口: POST /api/v1/transcode/file/download (QPS 10)
+//
+// 参数:
+//   - fileID: 转码空间中的视频文件 ID。
+//
+// 注意: 转码空间容量已满（IsFull 为 true）时不返回下载地址，DownloadURL 为空。
 func (s *TranscodeService) DownloadOriginal(ctx context.Context, fileID int64) (*TranscodeDownloadResult, error) {
 	var out TranscodeDownloadResult
 	err := s.client.post(ctx, "/api/v1/transcode/file/download", map[string]int64{"fileId": fileID}, &out)
@@ -221,7 +304,15 @@ func (s *TranscodeService) DownloadOriginal(ctx context.Context, fileID int64) (
 	return &out, nil
 }
 
-// DownloadM3U8 获取某分辨率 m3u8 文件的下载地址。分辨率 P 大写，如 "1080P"。
+// DownloadM3U8 获取某分辨率 m3u8 文件的下载地址。
+//
+// 接口: POST /api/v1/transcode/m3u8_ts/download (QPS 20)
+//
+// 参数:
+//   - fileID: 转码空间中的视频文件 ID。
+//   - resolution: 分辨率，P 必须大写，如 "1080P"。
+//
+// 注意: 转码空间容量已满（IsFull 为 true）时不返回下载地址。
 func (s *TranscodeService) DownloadM3U8(ctx context.Context, fileID int64, resolution string) (*TranscodeDownloadResult, error) {
 	var out TranscodeDownloadResult
 	err := s.client.post(ctx, "/api/v1/transcode/m3u8_ts/download", map[string]any{
@@ -236,7 +327,15 @@ func (s *TranscodeService) DownloadM3U8(ctx context.Context, fileID int64, resol
 }
 
 // DownloadTS 获取某分辨率单个 ts 分片的下载地址。
-// tsName 不含 ".ts" 后缀（Results 返回的 FileName 为 "000.ts" 时传 "000"）。
+//
+// 接口: POST /api/v1/transcode/m3u8_ts/download (QPS 20)
+//
+// 参数:
+//   - fileID: 转码空间中的视频文件 ID。
+//   - resolution: 分辨率，P 必须大写，如 "1080P"。
+//   - tsName: 分片名，不含 ".ts" 后缀（Results 返回的 FileName 为 "000.ts" 时传 "000"）。
+//
+// 注意: 转码空间容量已满（IsFull 为 true）时不返回下载地址。
 func (s *TranscodeService) DownloadTS(ctx context.Context, fileID int64, resolution, tsName string) (*TranscodeDownloadResult, error) {
 	var out TranscodeDownloadResult
 	err := s.client.post(ctx, "/api/v1/transcode/m3u8_ts/download", map[string]any{
@@ -261,8 +360,17 @@ type DownloadAllResult struct {
 	DownloadURL string `json:"downloadUrl"`
 }
 
-// DownloadAll 打包下载某个视频的全部转码文件。
-// IsDownloading 为 true 时需轮询；返回的 URL 含 access_token，注意日志脱敏。
+// DownloadAll 打包下载某个视频的全部转码文件（zip）。
+//
+// 接口: POST /api/v1/transcode/file/download/all (QPS 1)
+//
+// 参数:
+//   - fileID: 转码空间中的视频文件 ID。
+//   - zipName: 打包生成的 zip 文件名。
+//
+// 注意: IsDownloading 为 true 表示服务端仍在打包，需轮询，官方建议间隔
+// 10 秒；转码空间容量已满（IsFull 为 true）时不返回下载地址；返回的
+// DownloadURL 中携带 access_token，日志打印时注意脱敏。
 func (s *TranscodeService) DownloadAll(ctx context.Context, fileID int64, zipName string) (*DownloadAllResult, error) {
 	var out DownloadAllResult
 	err := s.client.post(ctx, "/api/v1/transcode/file/download/all", map[string]any{

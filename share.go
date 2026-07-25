@@ -14,12 +14,18 @@ type ShareService struct {
 }
 
 // ShareURL 按官方规则拼接分享页面链接：https://{uid}.share.123pan.cn/123pan/{shareKey}。
-// uid 可通过 client.User.Info 获取。
+//
+// 参数说明：
+//   - uid：用户账号 ID，可通过 client.User.Info 返回的 UserInfo.UID 获取。
+//   - shareKey：分享码，由 Create/CreatePaid 返回（ShareCreateResult.ShareKey）。
+//
+// 该函数仅做字符串拼接，不发起网络请求。
 func ShareURL(uid int64, shareKey string) string {
 	return fmt.Sprintf("https://%d.share.123pan.cn/123pan/%s", uid, shareKey)
 }
 
-// TrafficSwitch 分享提取流量包开关：1 全部关闭；2 打开游客免登录提取；3 打开超流量用户提取；4 全部开启。
+// TrafficSwitch 分享提取流量包开关。
+// 枚举值：1 全部关闭；2 打开游客免登录提取；3 打开超流量用户提取；4 全部开启。
 type TrafficSwitch int
 
 // ShareCreateRequest 是创建分享链接的参数。
@@ -42,7 +48,9 @@ type ShareCreateRequest struct {
 
 // ShareCreateResult 是创建分享链接的返回。
 type ShareCreateResult struct {
-	ShareID  int64  `json:"shareID"`
+	// ShareID 分享链接 ID，用于后续修改分享设置。
+	ShareID int64 `json:"shareID"`
+	// ShareKey 分享码，可配合 ShareURL 拼接完整分享页面链接。
 	ShareKey string `json:"shareKey"`
 }
 
@@ -54,7 +62,21 @@ func joinIDs(ids []int64) string {
 	return strings.Join(parts, ",")
 }
 
-// Create 创建分享链接。
+// Create 创建免费分享链接，返回分享 ID 与分享码。
+//
+// 接口: POST /api/v1/share/create
+//
+// 参数说明（见 ShareCreateRequest 各字段）：
+//   - ShareName：分享链接名称，必填。
+//   - ShareExpire：有效期天数，枚举 1、7、30、0（0 为永久），必填。
+//   - FileIDs：分享的文件 ID 列表，必填，最多 100 个。
+//   - SharePwd：提取码，可选，不填为公开分享。
+//   - TrafficSwitch：分享提取流量包开关，可选，含义见 TrafficSwitch 类型。
+//   - TrafficLimitSwitch：流量限制开关，可选：1 关闭限制；2 打开限制。
+//   - TrafficLimit：限制流量上限，单位字节，可选。
+//
+// 注意事项：完整分享页面链接需按 https://{uid}.share.123pan.cn/123pan/{shareKey}
+// 规则拼接（见 ShareURL），uid 来自 client.User.Info。
 func (s *ShareService) Create(ctx context.Context, req *ShareCreateRequest) (*ShareCreateResult, error) {
 	body := map[string]any{
 		"shareName":   req.ShareName,
@@ -88,21 +110,29 @@ type ShareInfo struct {
 	// Expiration 过期时间。
 	Expiration string `json:"expiration"`
 	// Expired 是否失效：0 未失效；1 失效。
-	Expired            int    `json:"expired"`
-	SharePwd           string `json:"sharePwd"`
-	TrafficSwitch      int    `json:"trafficSwitch"`
-	TrafficLimitSwitch int    `json:"trafficLimitSwitch"`
-	TrafficLimit       int64  `json:"trafficLimit"`
+	Expired int `json:"expired"`
+	// SharePwd 提取码，空字符串表示公开分享。
+	SharePwd string `json:"sharePwd"`
+	// TrafficSwitch 分享提取流量包开关：1 全部关闭；2 打开游客免登录提取；3 打开超流量用户提取；4 全部开启。
+	TrafficSwitch int `json:"trafficSwitch"`
+	// TrafficLimitSwitch 流量限制开关：1 关闭限制；2 打开限制。
+	TrafficLimitSwitch int `json:"trafficLimitSwitch"`
+	// TrafficLimit 限制流量上限（字节）。
+	TrafficLimit int64 `json:"trafficLimit"`
 	// BytesCharge 分享已使用流量（字节）。
-	BytesCharge   int64 `json:"bytesCharge"`
-	PreviewCount  int64 `json:"previewCount"`
+	BytesCharge int64 `json:"bytesCharge"`
+	// PreviewCount 预览次数。
+	PreviewCount int64 `json:"previewCount"`
+	// DownloadCount 下载次数。
 	DownloadCount int64 `json:"downloadCount"`
-	SaveCount     int64 `json:"saveCount"`
-	// 以下字段仅付费分享返回。
+	// SaveCount 转存次数。
+	SaveCount int64 `json:"saveCount"`
+	// PayAmount 付费金额（元）。以下字段仅付费分享返回。
 	PayAmount float64 `json:"payAmount"`
-	// Amount 分享收益。
-	Amount   float64 `json:"amount"`
-	OrderCnt int64   `json:"orderCnt"`
+	// Amount 分享收益（元）。
+	Amount float64 `json:"amount"`
+	// OrderCnt 付费订单数量。
+	OrderCnt int64 `json:"orderCnt"`
 }
 
 // ShareListResult 是分享链接列表的返回。
@@ -124,7 +154,15 @@ func shareListQuery(limit int, lastShareID int64) url.Values {
 	return q
 }
 
-// List 获取分享链接列表（lastShareId 游标翻页，返回 -1 表示结束）。
+// List 获取免费分享链接列表，按 lastShareId 游标翻页。
+//
+// 接口: GET /api/v1/share/list
+//
+// 参数说明：
+//   - limit：每页数量，最大 100；传 0 或负数时默认按 100 请求。
+//   - lastShareID：翻页游标，首页传 0，下一页传上一页返回的 LastShareID。
+//
+// 注意事项：返回的 LastShareID 为 -1 表示已到最后一页，翻页应就此结束。
 func (s *ShareService) List(ctx context.Context, limit int, lastShareID int64) (*ShareListResult, error) {
 	var out ShareListResult
 	if err := s.client.get(ctx, "/api/v1/share/list", shareListQuery(limit, lastShareID), &out); err != nil {
@@ -145,7 +183,18 @@ type ShareUpdateRequest struct {
 	TrafficLimit int64 `json:"trafficLimit,omitempty"`
 }
 
-// Update 修改分享链接的流量设置。
+// Update 批量修改免费分享链接的流量设置。
+//
+// 接口: PUT /api/v1/share/list/info
+//
+// 参数说明（见 ShareUpdateRequest 各字段）：
+//   - ShareIDs：待修改的分享链接 ID 列表，必填，最多 100 个。
+//   - TrafficSwitch：分享提取流量包开关，可选，含义见 TrafficSwitch 类型。
+//   - TrafficLimitSwitch：流量限制开关，可选：1 关闭限制；2 打开限制。
+//   - TrafficLimit：限制流量上限，单位字节，可选。
+//
+// 注意事项：仅支持修改以上三项流量相关设置，
+// 分享名称、有效期、提取码创建后均不可修改。
 func (s *ShareService) Update(ctx context.Context, req *ShareUpdateRequest) error {
 	return s.client.put(ctx, "/api/v1/share/list/info", req, nil)
 }
@@ -170,7 +219,21 @@ type PaidShareCreateRequest struct {
 	TrafficLimit int64
 }
 
-// CreatePaid 创建付费分享链接。
+// CreatePaid 创建付费分享链接，返回分享 ID 与分享码。
+//
+// 接口: POST /api/v1/share/content-payment/create
+//
+// 参数说明（见 PaidShareCreateRequest 各字段）：
+//   - ShareName：分享链接名称，必填，小于 35 字符且不含特殊字符。
+//   - FileIDs：分享的文件 ID 列表，必填，最多 100 个。
+//   - PayAmount：付费金额，必填，整数元，取值范围 1-1000。
+//   - IsReward：是否开启打赏，0 否，1 是。
+//   - ResourceDesc：资源描述，可选。
+//   - TrafficSwitch：分享提取流量包开关，可选，含义见 TrafficSwitch 类型。
+//   - TrafficLimitSwitch：流量限制开关，可选：1 关闭限制；2 打开限制。
+//   - TrafficLimit：限制流量上限，单位字节，可选。
+//
+// 注意事项：完整分享页面链接拼接规则与免费分享相同（见 ShareURL）。
 func (s *ShareService) CreatePaid(ctx context.Context, req *PaidShareCreateRequest) (*ShareCreateResult, error) {
 	body := map[string]any{
 		"shareName":  req.ShareName,
@@ -199,7 +262,16 @@ func (s *ShareService) CreatePaid(ctx context.Context, req *PaidShareCreateReque
 	return &out, nil
 }
 
-// ListPaid 获取付费分享链接列表（lastShareId 游标翻页，返回 -1 表示结束）。
+// ListPaid 获取付费分享链接列表，按 lastShareId 游标翻页。
+//
+// 接口: GET /api/v1/share/payment/list
+//
+// 参数说明：
+//   - limit：每页数量，最大 100；传 0 或负数时默认按 100 请求。
+//   - lastShareID：翻页游标，首页传 0，下一页传上一页返回的 LastShareID。
+//
+// 注意事项：返回的 LastShareID 为 -1 表示已到最后一页；
+// 付费分享条目会额外返回 PayAmount、Amount、OrderCnt 等收益字段。
 func (s *ShareService) ListPaid(ctx context.Context, limit int, lastShareID int64) (*ShareListResult, error) {
 	var out ShareListResult
 	if err := s.client.get(ctx, "/api/v1/share/payment/list", shareListQuery(limit, lastShareID), &out); err != nil {
@@ -208,7 +280,18 @@ func (s *ShareService) ListPaid(ctx context.Context, limit int, lastShareID int6
 	return &out, nil
 }
 
-// UpdatePaid 修改付费分享链接的流量设置。
+// UpdatePaid 批量修改付费分享链接的流量设置。
+//
+// 接口: PUT /api/v1/share/list/payment/info
+//
+// 参数说明（见 ShareUpdateRequest 各字段）：
+//   - ShareIDs：待修改的分享链接 ID 列表，必填，最多 100 个。
+//   - TrafficSwitch：分享提取流量包开关，可选，含义见 TrafficSwitch 类型。
+//   - TrafficLimitSwitch：流量限制开关，可选：1 关闭限制；2 打开限制。
+//   - TrafficLimit：限制流量上限，单位字节，可选。
+//
+// 注意事项：与 Update 相同，仅支持修改以上三项流量相关设置，
+// 分享名称、付费金额、资源描述创建后均不可修改。
 func (s *ShareService) UpdatePaid(ctx context.Context, req *ShareUpdateRequest) error {
 	return s.client.put(ctx, "/api/v1/share/list/payment/info", req, nil)
 }

@@ -145,6 +145,15 @@ func (c *Client) Token() string {
 	return c.token
 }
 
+// TokenInfo 返回当前持有的 access_token 及其过期时间。
+// 可用于在进程间持久化复用 token（配合 SetToken），
+// 避免频繁重新获取触发同 client_id 最多 3 个 token 的踢下线机制。
+func (c *Client) TokenInfo() (token string, expiredAt time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.token, c.tokenExpiredAt
+}
+
 // AccessTokenResult 是获取 access_token 接口的返回。
 type AccessTokenResult struct {
 	AccessToken string    `json:"accessToken"`

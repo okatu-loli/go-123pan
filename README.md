@@ -85,7 +85,34 @@ func main() {
 | [offline](examples/offline/) | 离线下载 + 进度轮询 |
 | [imagebed](examples/imagebed/) | 图床上传 + 获取外链 |
 
+## 🖥️ 命令行工具
+
+SDK 附带 `pan123` CLI，覆盖常用操作：
+
+```bash
+go install github.com/okatu-loli/go-123pan/cmd/pan123@latest
+
+# 保存凭证（也可用环境变量 PAN123_CLIENT_ID / PAN123_CLIENT_SECRET）
+pan123 login -client-id <ID> -client-secret <SECRET>
+
+pan123 whoami                    # 用户信息与空间用量
+pan123 ls                        # 列出根目录（可跟目录ID）
+pan123 mkdir -parent 0 新目录     # 创建目录
+pan123 upload -parent 0 a.zip    # 上传（自动秒传/分片）
+pan123 download -o a.zip 123456  # 下载
+pan123 rm 123456 123457          # 删除至回收站
+pan123 mv -to 789 123456         # 移动
+pan123 rename 123456 新名称       # 重命名
+pan123 share -pwd 1234 123456    # 创建分享链接
+pan123 offline https://…/f.mp4   # 离线下载并等待完成
+pan123 link 123456               # 获取直链
+```
+
+access_token 会缓存在系统配置目录（macOS 为 `~/Library/Application Support/pan123/`，Linux 为 `~/.config/pan123/`）并跨进程复用，避免触发官方同 client_id 最多 3 个 token 的限制。
+
 ## 📚 API 覆盖
+
+完整的「方法 ↔ 官方接口 ↔ 参数说明」对照表见 **[docs/API.md](docs/API.md)**，逐方法的类型签名与注释见 [pkg.go.dev](https://pkg.go.dev/github.com/okatu-loli/go-123pan)。
 
 | 服务 | 说明 | 主要方法 |
 |---|---|---|

@@ -85,7 +85,34 @@ More runnable examples live in [examples/](examples/):
 | [offline](examples/offline/) | Offline download + progress polling |
 | [imagebed](examples/imagebed/) | Image-bed upload + public URL |
 
+## 🖥️ Command-Line Tool
+
+The SDK ships with a `pan123` CLI covering everyday operations:
+
+```bash
+go install github.com/okatu-loli/go-123pan/cmd/pan123@latest
+
+# Save credentials (or use PAN123_CLIENT_ID / PAN123_CLIENT_SECRET env vars)
+pan123 login -client-id <ID> -client-secret <SECRET>
+
+pan123 whoami                    # user info & storage usage
+pan123 ls                        # list root directory (optional dir ID)
+pan123 mkdir -parent 0 newdir    # create a directory
+pan123 upload -parent 0 a.zip    # upload (instant-upload / slicing handled)
+pan123 download -o a.zip 123456  # download
+pan123 rm 123456 123457          # move to trash
+pan123 mv -to 789 123456         # move
+pan123 rename 123456 newname     # rename
+pan123 share -pwd 1234 123456    # create a share link
+pan123 offline https://…/f.mp4   # offline download, wait for completion
+pan123 link 123456               # get a direct link
+```
+
+The access token is cached in the OS config directory (`~/Library/Application Support/pan123/` on macOS, `~/.config/pan123/` on Linux) and reused across runs, avoiding the 3-tokens-per-client_id kick-out limit.
+
 ## 📚 API Coverage
+
+See **[docs/API.md](docs/API.md)** (Chinese) for the full method ↔ endpoint ↔ parameter reference, and [pkg.go.dev](https://pkg.go.dev/github.com/okatu-loli/go-123pan) for per-method signatures and docs.
 
 | Service | Scope | Key methods |
 |---|---|---|

@@ -21,7 +21,17 @@ const AuthBaseURL = "https://yun.123pan.com"
 // OAuthScope 是授权固定 scope。
 const OAuthScope = "user:base,file:all:read,file:all:write"
 
-// AuthURL 构造用户授权页面地址。用户授权后将携带 code 回跳 redirectURI。
+// AuthURL 构造用户授权页面地址（浏览器跳转用，本方法不发起 HTTP 请求）。
+//
+// 接口: GET https://yun.123pan.com/auth（授权页面，域名固定为 yun.123pan.com）
+//
+// 参数:
+//   - clientID: 应用的 appId。
+//   - redirectURI: 授权后的回跳地址，须与应用注册的回调地址一致。
+//   - state: 自定义透传参数，回跳时原样带回，可用于防 CSRF。
+//
+// 注意: scope 固定为 OAuthScope；用户授权后将携带 code（与 state）回跳
+// redirectURI，随后用 TokenByCode 换取 access_token。
 func (s *OAuthService) AuthURL(clientID, redirectURI, state string) string {
 	q := url.Values{}
 	q.Set("client_id", clientID)
@@ -43,7 +53,17 @@ type OAuthToken struct {
 }
 
 // TokenByCode 用授权 code 换取 access_token。
-// redirectURI 必须与应用注册的回调地址一致。
+//
+// 接口: POST /api/v1/oauth2/access_token (QPS 限制 100 次/分钟)
+//
+// 参数:
+//   - clientID: 应用的 appId。
+//   - clientSecret: 应用的 secretId。
+//   - code: 授权回跳携带的授权码，一次性使用。
+//   - redirectURI: 必须与应用注册的回调地址一致。
+//
+// 注意: 该接口返回扁平 JSON，不包裹统一响应结构。access_token 有效期见
+// ExpiresIn（秒）；refresh_token 单次有效、90 天有效期，务必持久化保存。
 func (s *OAuthService) TokenByCode(ctx context.Context, clientID, clientSecret, code, redirectURI string) (*OAuthToken, error) {
 	q := url.Values{}
 	q.Set("client_id", clientID)
@@ -55,7 +75,17 @@ func (s *OAuthService) TokenByCode(ctx context.Context, clientID, clientSecret, 
 }
 
 // RefreshToken 用 refresh_token 刷新令牌。
-// 刷新成功后旧 access_token 立即失效，refresh_token 换新（旧值作废）。
+//
+// 接口: POST /api/v1/oauth2/access_token (QPS 限制 100 次/分钟)
+//
+// 参数:
+//   - clientID: 应用的 appId。
+//   - clientSecret: 应用的 secretId。
+//   - refreshToken: 上次颁发的 refresh_token（单次有效，有效期 90 天）。
+//
+// 注意: 刷新成功后旧 access_token 立即失效，refresh_token 同时换新（旧值
+// 作废），必须持久化新返回的 RefreshToken，否则后续将无法再次刷新。
+// 该接口返回扁平 JSON，不包裹统一响应结构。
 func (s *OAuthService) RefreshToken(ctx context.Context, clientID, clientSecret, refreshToken string) (*OAuthToken, error) {
 	q := url.Values{}
 	q.Set("client_id", clientID)
