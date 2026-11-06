@@ -120,11 +120,30 @@ access_token 会缓存在系统配置目录（macOS 为 `~/Library/Application S
 | `client.Upload` | 文件上传 | `UploadFile` `UploadFromPath`（高级封装）；V2：`Create` `UploadSlice` `Complete` `Domains` `SingleCreate` `Sha1Reuse`；V1：`CreateV1` `GetUploadURLV1` `PutSliceV1` `ListUploadPartsV1` `CompleteV1` `AsyncResultV1` |
 | `client.Share` | 分享管理 | `Create` `List` `Update` `CreatePaid` `ListPaid` `UpdatePaid` |
 | `client.Offline` | 离线下载 | `Download` `Process` |
-| `client.User` | 用户信息 | `Info` |
+| `client.User` | 用户信息 | `Info` `WebInfo`（网页登录容量） |
 | `client.Link` | 直链 | `Enable` `Disable` `URL` `RefreshCache` `TrafficLog` `OfflineLogs` `SwitchIPBlacklist` `UpdateIPBlacklist` `IPBlacklist` |
 | `client.Oss` | 图床 | `UploadFile` `UploadFromPath`（高级封装）`Mkdir` `CreateFile` `GetUploadURL` `UploadComplete` `UploadAsyncResult` `CopyFromDisk` `CopyProcess` `CopyFailList` `Move` `Delete` `Detail` `List` `OfflineDownload` `OfflineProcess` |
 | `client.Transcode` | 视频转码 | `FolderInfo` `CloudVideoFiles` `SpaceFiles` `UploadFromCloudDisk` `Resolutions` `Transcode` `Records` `Results` `List` `Delete` `DownloadOriginal` `DownloadM3U8` `DownloadTS` `DownloadAll` |
 | `client.OAuth` | 三方授权 | `AuthURL` `TokenByCode` `RefreshToken` |
+
+## 网页登录容量
+
+`WebInfo` 查询网页登录使用的 `GET /b/api/user/info`，与 Open API 的 `Info` 分开。`webToken` 必须由调用方提供，传入时不带 `Bearer ` 前缀；不要使用 Open access_token 代替。
+
+```go
+info, err := client.User.WebInfo(ctx, webToken)
+if err != nil {
+	return err
+}
+if info.SpacePermanent != nil && info.SpaceUsed != nil {
+	fmt.Println("总容量（字节）:", *info.SpacePermanent)
+	fmt.Println("已用容量（字节）:", *info.SpaceUsed)
+}
+```
+
+容量字段使用指针，`nil` 表示接口未提供或返回 null，`0` 表示明确的零值；`SpacePermanentTotal`、`SpaceUsedTotal` 保留接口原始字符串。官网当前以 `SpacePermanent`、`SpaceUsed` 展示容量，SDK 不自行叠加临时空间。该方法自动生成网页签名，不登录、刷新网页 token 或触发容量重算，也不改变 Open token。
+
+此接口根据 2026-11-06 的官网请求实现，不属于已公布的 Open API，协议可能随官网变更。
 
 ## ⚙️ 配置选项
 
@@ -133,7 +152,8 @@ client := pan123.New(id, secret,
 	pan123.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}), // 自定义 HTTP 客户端
 	pan123.WithMaxRetries(5),      // 429 限流重试次数（默认 3，0 关闭）
 	pan123.WithoutRateLimit(),     // 关闭内置客户端限流
-	pan123.WithBaseURL("..."),     // 覆盖接口域名（测试/代理）
+	pan123.WithBaseURL("..."),     // 覆盖 Open API 域名（测试/代理）
+	pan123.WithWebBaseURL("..."),  // 仅覆盖网页接口域名，与 Open API 独立
 )
 
 // 三方挂载应用：使用 OAuth 授权得到的 token

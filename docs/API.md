@@ -1,6 +1,6 @@
 # go-123pan API 参考
 
-本文档按服务分组列出 SDK 全部方法与官方接口的对应关系、参数说明和使用注意事项。完整的类型签名与字段说明见 [pkg.go.dev](https://pkg.go.dev/github.com/okatu-loli/go-123pan)，官方接口文档见 [123 云盘开放平台](https://123yunpan.yuque.com/org-wiki-123yunpan-muaork/cr6ced)。
+本文档按服务分组列出 SDK 全部方法与接口的对应关系、参数说明和使用注意事项。完整的类型签名与字段说明见 [pkg.go.dev](https://pkg.go.dev/github.com/okatu-loli/go-123pan)，官方接口文档见 [123 云盘开放平台](https://123yunpan.yuque.com/org-wiki-123yunpan-muaork/cr6ced)。`User.WebInfo` 使用单独标注的网页私有接口。
 
 ## 目录
 
@@ -27,7 +27,7 @@
 | `(*Client).SetToken(token, expiredAt)` | 手动设置 token | 配合 `TokenInfo` 可跨进程持久化复用 token |
 | `(*Client).Token()` / `TokenInfo()` | 读取当前 token | `TokenInfo` 额外返回过期时间 |
 
-**Options**：`WithHTTPClient`（自定义 HTTP 客户端）、`WithBaseURL`（覆盖域名）、`WithUserAgent`、`WithMaxRetries(n)`（429 重试次数，默认 3）、`WithoutRateLimit()`（关闭内置限流）。
+**Options**：`WithHTTPClient`（自定义 HTTP 客户端）、`WithBaseURL`（覆盖 Open API 域名）、`WithWebBaseURL`（仅覆盖网页接口域名，默认 `https://api.123278.com`）、`WithUserAgent`、`WithMaxRetries(n)`（429 重试次数，默认 3）、`WithoutRateLimit()`（关闭内置限流）。两种接口域名分别配置。
 
 所有 API 方法第一个参数均为 `context.Context`，支持超时与取消。
 
@@ -121,6 +121,24 @@
 | 方法 | 接口 | 功能 | 说明 |
 |---|---|---|---|
 | `Info(ctx)` | `GET /api/v1/user/info` (QPS 10) | 获取用户信息 | 含 UID（拼分享链接用）、昵称、空间用量、VIP、直链流量、开发者权益等；非会员 VipInfoList 为 nil |
+| `WebInfo(ctx, webToken)` | `GET /b/api/user/info`（网页私有接口） | 查询网页容量原始字段 | 需要独立的网页 token，不带 `Bearer ` 前缀；不使用或刷新 Open token |
+
+### 网页容量 `WebUserInfo`
+
+根据 2026-11-06 官网请求实现。此接口没有已公布的 Open API 契约或已确认的 QPS 限额；SDK 自动设置网页请求头、生成签名，并复用配置的 HTTP 客户端及 429 重试次数。
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `SpacePermanent` | `*int64` | 官网展示的总容量，字节 |
+| `SpaceUsed` | `*int64` | 官网展示的已用容量，字节 |
+| `SpaceTemp` | `*int64` | 接口返回的临时空间，字节；不自动计入总容量 |
+| `SpacePermanentTotal` | `*string` | 接口原始总容量字符串，不做数值转换 |
+| `SpaceUsedTotal` | `*string` | 接口原始已用容量字符串，不做数值转换 |
+| `SpaceTempExpr` | `json.RawMessage` | 临时空间到期信息，保留原始 JSON |
+
+指针为 `nil` 表示缺失或 null，与明确返回的零值不同。仅当总容量、已用容量都存在且数值有效时，调用方才应计算剩余空间；不要把缺失值当零值，也不要自行叠加临时空间。
+
+该方法不执行网页登录、token 刷新或容量重算。`IsTokenExpired(err)` 为真时，应由调用方更新网页 token；现有 Open 身份与缓存不会因此变化。网页协议可能随官网更新。
 
 ## Link — 直链
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-// APIError 表示开放平台返回的业务错误（响应 code != 0）。
+// APIError 表示 123 云盘接口返回的业务错误（响应 code != 0）。
 type APIError struct {
 	// Code 是响应体中的业务错误码。
 	Code int

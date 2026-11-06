@@ -38,6 +38,7 @@ type Client struct {
 	clientSecret string
 
 	baseURL    string
+	webBaseURL string
 	httpClient *http.Client
 	userAgent  string
 	maxRetries int
@@ -109,6 +110,7 @@ func NewWithToken(accessToken string, opts ...Option) *Client {
 func newClient(opts ...Option) *Client {
 	c := &Client{
 		baseURL:    DefaultBaseURL,
+		webBaseURL: DefaultWebBaseURL,
 		httpClient: &http.Client{Timeout: 60 * time.Second},
 		userAgent:  defaultUA,
 		maxRetries: 3,
@@ -228,9 +230,15 @@ func (c *Client) doNoAuth(ctx context.Context, method, path string, body, out an
 }
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, out any, auth bool) error {
+	return c.retry(ctx, func() error {
+		return c.doOnce(ctx, method, path, query, body, out, auth)
+	})
+}
+
+func (c *Client) retry(ctx context.Context, call func() error) error {
 	var attempt int
 	for {
-		err := c.doOnce(ctx, method, path, query, body, out, auth)
+		err := call()
 		if err == nil {
 			return nil
 		}

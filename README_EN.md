@@ -120,11 +120,30 @@ See **[docs/API.md](docs/API.md)** (Chinese) for the full method ↔ endpoint �
 | `client.Upload` | Uploads | `UploadFile` `UploadFromPath` (high-level); V2: `Create` `UploadSlice` `Complete` `Domains` `SingleCreate` `Sha1Reuse`; V1: `CreateV1` `GetUploadURLV1` `PutSliceV1` `ListUploadPartsV1` `CompleteV1` `AsyncResultV1` |
 | `client.Share` | Sharing | `Create` `List` `Update` `CreatePaid` `ListPaid` `UpdatePaid` |
 | `client.Offline` | Offline download | `Download` `Process` |
-| `client.User` | User | `Info` |
+| `client.User` | User | `Info` `WebInfo` (web-session capacity) |
 | `client.Link` | Direct links | `Enable` `Disable` `URL` `RefreshCache` `TrafficLog` `OfflineLogs` `SwitchIPBlacklist` `UpdateIPBlacklist` `IPBlacklist` |
 | `client.Oss` | Image bed | `UploadFile` `UploadFromPath` (high-level) `Mkdir` `CreateFile` `GetUploadURL` `UploadComplete` `UploadAsyncResult` `CopyFromDisk` `CopyProcess` `CopyFailList` `Move` `Delete` `Detail` `List` `OfflineDownload` `OfflineProcess` |
 | `client.Transcode` | Video transcoding | `FolderInfo` `CloudVideoFiles` `SpaceFiles` `UploadFromCloudDisk` `Resolutions` `Transcode` `Records` `Results` `List` `Delete` `DownloadOriginal` `DownloadM3U8` `DownloadTS` `DownloadAll` |
 | `client.OAuth` | Third-party OAuth | `AuthURL` `TokenByCode` `RefreshToken` |
+
+## Web-session capacity
+
+`WebInfo` queries the website's `GET /b/api/user/info`, separately from the Open API's `Info`. Supply a web-session token without the `Bearer ` prefix; do not substitute an Open access token.
+
+```go
+info, err := client.User.WebInfo(ctx, webToken)
+if err != nil {
+	return err
+}
+if info.SpacePermanent != nil && info.SpaceUsed != nil {
+	fmt.Println("Total capacity (bytes):", *info.SpacePermanent)
+	fmt.Println("Used capacity (bytes):", *info.SpaceUsed)
+}
+```
+
+Capacity fields are pointers: `nil` means missing or null, while `0` is an explicit zero. `SpacePermanentTotal` and `SpaceUsedTotal` preserve the original strings. The website currently displays `SpacePermanent` and `SpaceUsed`; the SDK does not add temporary capacity. This method signs web requests automatically. It does not log in, refresh the web token, recalculate usage, or change the Open token.
+
+This endpoint follows website requests observed on 2026-11-06. It is not a published Open API and may change with the website.
 
 ## ⚙️ Options
 
@@ -133,7 +152,8 @@ client := pan123.New(id, secret,
 	pan123.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
 	pan123.WithMaxRetries(5),      // retries on 429 (default 3, 0 disables)
 	pan123.WithoutRateLimit(),     // disable built-in client-side rate limiting
-	pan123.WithBaseURL("..."),     // override API host (testing/proxy)
+	pan123.WithBaseURL("..."),     // override Open API host (testing/proxy)
+	pan123.WithWebBaseURL("..."),  // override only the independent web API host
 )
 
 // Third-party mount apps: use an OAuth access token directly
