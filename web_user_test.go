@@ -74,14 +74,14 @@ func TestUserWebInfoUsesSeparateIdentityAndCapturedProtocolFields(t *testing.T) 
 	open := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/access_token" {
 			openTokenCalls.Add(1)
-			fmt.Fprintf(w, `{"code":0,"data":{"accessToken":"open-fixture-token","expiredAt":%q}}`, time.Now().Add(time.Hour).Format(time.RFC3339))
+			_, _ = fmt.Fprintf(w, `{"code":0,"data":{"accessToken":"open-fixture-token","expiredAt":%q}}`, time.Now().Add(time.Hour).Format(time.RFC3339))
 			return
 		}
 		openCalls.Add(1)
 		if r.Method != "GET" || r.URL.Path != "/api/v1/user/info" || r.Header.Get("Platform") != "open_platform" || r.Header.Get("Authorization") != "Bearer open-fixture-token" || len(r.URL.Query()) != 0 {
 			t.Error("existing Open user info semantics changed")
 		}
-		fmt.Fprint(w, `{"code":0,"data":{"uid":42,"nickname":"Open fixture"}}`)
+		_, _ = fmt.Fprint(w, `{"code":0,"data":{"uid":42,"nickname":"Open fixture"}}`)
 	}))
 	defer open.Close()
 	web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +90,7 @@ func TestUserWebInfoUsesSeparateIdentityAndCapturedProtocolFields(t *testing.T) 
 		if r.UserAgent() != "SDK web fixture" {
 			t.Error("WithUserAgent was not applied")
 		}
-		fmt.Fprint(w, `{"code":0,"message":"ok","data":{"SpacePermanent":12345678901234,"SpacePermanentTotal":"12345678901234","SpaceTemp":0,"SpaceUsed":123456789,"SpaceUsedTotal":"123456789","SpaceTempExpr":"2030-01-02 03:04:05"}}`)
+		_, _ = fmt.Fprint(w, `{"code":0,"message":"ok","data":{"SpacePermanent":12345678901234,"SpacePermanentTotal":"12345678901234","SpaceTemp":0,"SpaceUsed":123456789,"SpaceUsedTotal":"123456789","SpaceTempExpr":"2030-01-02 03:04:05"}}`)
 	}))
 	defer web.Close()
 	client := pan123.New("open-fixture-id", "open-fixture-secret", pan123.WithBaseURL(open.URL), pan123.WithWebBaseURL(web.URL), pan123.WithHTTPClient(web.Client()), pan123.WithUserAgent("SDK web fixture"))
@@ -144,7 +144,7 @@ func TestUserWebInfoPreservesUnknownZeroAndLargeValues(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				checkWebRequest(t, r)
-				fmt.Fprint(w, `{"code":0,"data":`+tc.data+`}`)
+				_, _ = fmt.Fprint(w, `{"code":0,"data":`+tc.data+`}`)
 			}))
 			defer server.Close()
 			client := pan123.NewWithToken("open-fixture-token", pan123.WithWebBaseURL(server.URL))
@@ -181,7 +181,7 @@ func TestUserWebInfoRejectsBadResponsesWithoutOpenRefresh(t *testing.T) {
 				calls.Add(1)
 				checkWebRequest(t, r)
 				w.WriteHeader(tc.status)
-				fmt.Fprint(w, tc.body)
+				_, _ = fmt.Fprint(w, tc.body)
 			}))
 			defer server.Close()
 			client := pan123.New("open-fixture-id", "open-fixture-secret", pan123.WithWebBaseURL(server.URL), pan123.WithMaxRetries(0))
@@ -241,10 +241,10 @@ func TestUserWebInfoTransportErrorAndRateLimit(t *testing.T) {
 	limited := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		checkWebRequest(t, r)
 		if calls.Add(1) == 1 {
-			fmt.Fprint(w, `{"code":429,"message":"limited"}`)
+			_, _ = fmt.Fprint(w, `{"code":429,"message":"limited"}`)
 			return
 		}
-		fmt.Fprint(w, `{"code":0,"data":{"SpaceUsed":0}}`)
+		_, _ = fmt.Fprint(w, `{"code":0,"data":{"SpaceUsed":0}}`)
 	}))
 	defer limited.Close()
 	client = pan123.NewWithToken("open-fixture-token", pan123.WithWebBaseURL(limited.URL), pan123.WithMaxRetries(1))
